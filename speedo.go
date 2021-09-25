@@ -1,8 +1,11 @@
 package speedo
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"sync"
 	"time"
 
@@ -13,6 +16,7 @@ type Speedometer struct {
 	id       string
 	name     string
 	log      bool
+	server   string
 	count    uint64
 	guard    chan struct{}
 	duration time.Duration
@@ -26,8 +30,9 @@ type SpeedStat struct {
 }
 
 type Config struct {
-	Name string
-	Log  bool
+	Name   string
+	Log    bool
+	Server string
 }
 
 func (s *Speedometer) GetStat() SpeedStat {
@@ -110,11 +115,38 @@ func (s *Speedometer) Stop() {
 	s.mutex.Unlock()
 }
 
+func (s *Speedometer) postLog() {
+	data := s.GetStat()
+	b, _ := json.Marshal(data)
+	http.Post(
+		fmt.Sprintf(`%s/stat/%s`, s.server, s.id),
+		"application/json",
+		bytes.NewReader(b),
+	)
+}
+
+func (s *Speedometer) postInfo() {
+	b, _ := json.Marshal(struct {
+		Name string
+	}{
+		Name: s.name,
+	})
+	http.Post(
+		fmt.Sprintf(`%s/info/%s`, s.server, s.id),
+		"application/json",
+		bytes.NewReader(b),
+	)
+}
+
 func NewSpeedometer(config Config) *Speedometer {
 	s := &Speedometer{name: config.Name, log: config.Log}
 	s.id = uuid.NewString()
 	if s.duration == 0 {
 		s.duration = time.Second * 1
+	}
+	if s.server != "" {
+		go s.postInfo()
+		go s.postLog()
 	}
 	s.guard = make(chan struct{})
 	go s.startTicker()

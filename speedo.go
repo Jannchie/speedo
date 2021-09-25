@@ -109,6 +109,21 @@ func (s *Speedometer) autoPrint() {
 	}
 }
 
+func (s *Speedometer) autoPost() {
+	ticker := time.NewTicker(time.Second * 5)
+	for {
+		select {
+		case <-ticker.C:
+			s.postLog()
+		case _, ok := <-s.guard:
+			if !ok {
+				ticker.Stop()
+				return
+			}
+		}
+	}
+}
+
 func (s *Speedometer) Stop() {
 	s.mutex.Lock()
 	s.guard <- struct{}{}
@@ -117,12 +132,18 @@ func (s *Speedometer) Stop() {
 
 func (s *Speedometer) postLog() {
 	data := s.GetStat()
-	b, _ := json.Marshal(data)
-	http.Post(
+	b, err := json.Marshal(data)
+	if err != nil {
+		log.Println(err)
+	}
+	_, err = http.Post(
 		fmt.Sprintf(`%s/stat/%s`, s.server, s.id),
 		"application/json",
 		bytes.NewReader(b),
 	)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 func (s *Speedometer) postInfo() {
@@ -131,22 +152,25 @@ func (s *Speedometer) postInfo() {
 	}{
 		Name: s.name,
 	})
-	http.Post(
+	_, err := http.Post(
 		fmt.Sprintf(`%s/info/%s`, s.server, s.id),
 		"application/json",
 		bytes.NewReader(b),
 	)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 func NewSpeedometer(config Config) *Speedometer {
-	s := &Speedometer{name: config.Name, log: config.Log}
+	s := &Speedometer{name: config.Name, log: config.Log, server: config.Server}
 	s.id = uuid.NewString()
 	if s.duration == 0 {
 		s.duration = time.Second * 1
 	}
 	if s.server != "" {
 		go s.postInfo()
-		go s.postLog()
+		go s.autoPost()
 	}
 	s.guard = make(chan struct{})
 	go s.startTicker()

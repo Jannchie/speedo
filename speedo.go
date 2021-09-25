@@ -25,8 +25,8 @@ type Speedometer struct {
 }
 
 type SpeedStat struct {
-	Count uint64
-	Speed uint64
+	Count uint64 `json:"count"`
+	Speed uint64 `json:"speed"`
 }
 
 type Config struct {
@@ -127,7 +127,7 @@ func (s *Speedometer) postLog() {
 
 func (s *Speedometer) postInfo() {
 	b, _ := json.Marshal(struct {
-		Name string
+		Name string `json:"name"`
 	}{
 		Name: s.name,
 	})

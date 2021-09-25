@@ -13,15 +13,17 @@ import (
 )
 
 type Speedometer struct {
-	id       string
-	name     string
-	log      bool
-	server   string
-	count    uint64
-	guard    chan struct{}
-	duration time.Duration
-	history  []uint64
-	mutex    sync.RWMutex
+	id               string
+	name             string
+	log              bool
+	server           string
+	count            uint64
+	postIntervalSEC  int64
+	printIntervalSEC int64
+	guard            chan struct{}
+	duration         time.Duration
+	history          []uint64
+	mutex            sync.RWMutex
 }
 
 type SpeedStat struct {
@@ -30,9 +32,11 @@ type SpeedStat struct {
 }
 
 type Config struct {
-	Name   string
-	Log    bool
-	Server string
+	Name             string
+	Log              bool
+	Server           string
+	PostIntervalSEC  int64
+	PrintIntervalSEC int64
 }
 
 func (s *Speedometer) GetStat() SpeedStat {
@@ -95,7 +99,7 @@ func (s *Speedometer) GetStatusString() string {
 }
 
 func (s *Speedometer) autoPrint() {
-	ticker := time.NewTicker(time.Second * 5)
+	ticker := time.NewTicker(time.Second * time.Duration(s.printIntervalSEC))
 	for {
 		select {
 		case <-ticker.C:
@@ -110,7 +114,7 @@ func (s *Speedometer) autoPrint() {
 }
 
 func (s *Speedometer) autoPost() {
-	ticker := time.NewTicker(time.Second * 5)
+	ticker := time.NewTicker(time.Second * time.Duration(s.postIntervalSEC))
 	for {
 		select {
 		case <-ticker.C:
@@ -163,7 +167,19 @@ func (s *Speedometer) postInfo() {
 }
 
 func NewSpeedometer(config Config) *Speedometer {
-	s := &Speedometer{name: config.Name, log: config.Log, server: config.Server}
+	s := &Speedometer{
+		name:             config.Name,
+		log:              config.Log,
+		server:           config.Server,
+		postIntervalSEC:  config.PostIntervalSEC,
+		printIntervalSEC: config.PrintIntervalSEC,
+	}
+	if s.postIntervalSEC == 0 {
+		s.postIntervalSEC = 60
+	}
+	if s.printIntervalSEC == 0 {
+		s.printIntervalSEC = 5
+	}
 	s.id = uuid.NewString()
 	if s.duration == 0 {
 		s.duration = time.Second * 1

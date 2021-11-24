@@ -12,6 +12,12 @@ import (
 	"github.com/google/uuid"
 )
 
+var (
+	Accumulation uint8 = 0
+	Variation    uint8 = 1
+	Percent      uint8 = 2
+)
+
 type Speedometer struct {
 	id               string
 	name             string
@@ -24,6 +30,7 @@ type Speedometer struct {
 	duration         time.Duration
 	history          []uint64
 	mutex            sync.RWMutex
+	speedoType       uint8
 }
 
 type SpeedStat struct {
@@ -37,6 +44,7 @@ type Config struct {
 	Server           string
 	PostIntervalSEC  int64
 	PrintIntervalSEC int64
+	SpeedoType       uint8
 }
 
 func (s *Speedometer) GetStat() SpeedStat {
@@ -89,12 +97,29 @@ func (s *Speedometer) AddCount(n uint64) {
 	s.count += n
 }
 
+func (s *Speedometer) SetValue(n uint64) {
+	s.mutex.Lock()
+	s.count = n
+	s.mutex.Unlock()
+}
+
 func (s *Speedometer) GetStatusString() string {
 	stat := s.GetStat()
+	var statusWithoutName string
+
+	switch s.speedoType {
+	case Accumulation:
+		statusWithoutName = fmt.Sprintf("Speed: %d/min Total: %d", stat.Speed, stat.Count)
+	case Variation:
+		statusWithoutName = fmt.Sprintf("Current: %d Variation: %d/min", stat.Count, stat.Speed)
+	case Percent:
+		statusWithoutName = fmt.Sprintf("Percent: %d%%", stat.Count)
+	}
+
 	if s.name != "" {
-		return fmt.Sprintf("%s Speed: %d/min Total: %d", s.name, stat.Speed, stat.Count)
+		return fmt.Sprintf("%s %s", s.name, statusWithoutName)
 	} else {
-		return fmt.Sprintf("Speed: %d/min Total: %d", stat.Speed, stat.Count)
+		return statusWithoutName
 	}
 }
 
@@ -153,8 +178,10 @@ func (s *Speedometer) postLog() {
 func (s *Speedometer) postInfo() {
 	b, _ := json.Marshal(struct {
 		Name string `json:"name"`
+		Type uint8  `json:"type"`
 	}{
 		Name: s.name,
+		Type: s.speedoType,
 	})
 	_, err := http.Post(
 		fmt.Sprintf(`%s/info/%s`, s.server, s.id),
@@ -173,6 +200,7 @@ func NewSpeedometer(config Config) *Speedometer {
 		server:           config.Server,
 		postIntervalSEC:  config.PostIntervalSEC,
 		printIntervalSEC: config.PrintIntervalSEC,
+		speedoType:       config.SpeedoType,
 	}
 	if s.postIntervalSEC == 0 {
 		s.postIntervalSEC = 60

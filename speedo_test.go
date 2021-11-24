@@ -6,7 +6,7 @@ import (
 )
 
 func TestSpeedo(t *testing.T) {
-	s := NewSpeedometer(Config{Log: true, Server: ""})
+	s := NewSpeedometer(Config{Log: true, Server: "http://:8080", PostIntervalSEC: 5})
 	ticker := time.NewTicker(time.Second)
 	count := 20
 	for i := 0; i < count; i++ {

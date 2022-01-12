@@ -15,7 +15,7 @@ import (
 var (
 	Accumulation uint8 = 0
 	Variation    uint8 = 1
-	Percent      uint8 = 2
+	Progress     uint8 = 2
 )
 
 type Speedometer struct {
@@ -24,6 +24,7 @@ type Speedometer struct {
 	log              bool
 	server           string
 	count            uint64
+	total            uint64
 	postIntervalSEC  int64
 	printIntervalSEC int64
 	guard            chan struct{}
@@ -34,8 +35,11 @@ type Speedometer struct {
 }
 
 type SpeedStat struct {
-	Count uint64 `json:"count"`
-	Speed uint64 `json:"speed"`
+	Count     uint64 `json:"count"`
+	Speed     uint64 `json:"speed"`
+	Variation uint64 `json:"variation"`
+	Progress  uint64 `json:"progress"`
+	Total     uint64 `json:"total"`
 }
 
 type Config struct {
@@ -55,12 +59,13 @@ func (s *Speedometer) GetStat() SpeedStat {
 	defer s.mutex.Unlock()
 	count := len(s.history)
 	if count <= 1 {
-		ss.Speed = 0
 		return ss
 	} else {
 		deltaTime := uint64(count-1) * uint64(s.duration)
 		delta = s.history[count-1] - s.history[0]
+		ss.Variation = delta
 		ss.Speed = delta * uint64(time.Minute) / deltaTime
+		ss.Total = s.total
 		return ss
 	}
 }
@@ -92,15 +97,20 @@ func (s *Speedometer) startTicker() {
 }
 
 func (s *Speedometer) AddCount(n uint64) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.count += n
+	s.SetValue(s.count + n)
 }
+
 
 func (s *Speedometer) SetValue(n uint64) {
 	s.mutex.Lock()
 	s.count = n
 	s.mutex.Unlock()
+}
+
+func (s *Speedometer) SetTotal(n uint64) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.total = n
 }
 
 func (s *Speedometer) GetStatusString() string {
@@ -112,8 +122,8 @@ func (s *Speedometer) GetStatusString() string {
 		statusWithoutName = fmt.Sprintf("Speed: %d/min Total: %d", stat.Speed, stat.Count)
 	case Variation:
 		statusWithoutName = fmt.Sprintf("Current: %d Variation: %d/min", stat.Count, stat.Speed)
-	case Percent:
-		statusWithoutName = fmt.Sprintf("Percent: %d%%", stat.Count)
+	case Progress:
+		statusWithoutName = fmt.Sprintf("Percent: %d%%, %d/%d", stat.Count*100/stat.Speed, stat.Count, stat.Total)
 	}
 
 	if s.name != "" {
@@ -221,5 +231,12 @@ func NewSpeedometer(config Config) *Speedometer {
 	if s.log {
 		go s.autoPrint()
 	}
+	return s
+}
+
+func NewProgressSpeedometer(total uint64, config Config) *Speedometer {
+	s := NewSpeedometer(config)
+	s.total = total
+	s.speedoType = Progress
 	return s
 }

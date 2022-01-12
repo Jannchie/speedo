@@ -35,11 +35,10 @@ type Speedometer struct {
 }
 
 type SpeedStat struct {
-	Count     uint64 `json:"count"`
-	Speed     uint64 `json:"speed"`
-	Variation uint64 `json:"variation"`
-	Progress  uint64 `json:"progress"`
-	Total     uint64 `json:"total"`
+	Count    uint64 `json:"count"`
+	Speed    int64  `json:"speed"`
+	Progress uint64 `json:"progress"`
+	Total    uint64 `json:"total"`
 }
 
 type Config struct {
@@ -48,24 +47,22 @@ type Config struct {
 	Server           string
 	PostIntervalSEC  int64
 	PrintIntervalSEC int64
-	SpeedoType       uint8
 }
 
 func (s *Speedometer) GetStat() SpeedStat {
 	ss := SpeedStat{}
 	ss.Count = s.count
-	var delta uint64
+	ss.Total = s.total
+	var delta int64
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	count := len(s.history)
 	if count <= 1 {
 		return ss
 	} else {
-		deltaTime := uint64(count-1) * uint64(s.duration)
-		delta = s.history[count-1] - s.history[0]
-		ss.Variation = delta
-		ss.Speed = delta * uint64(time.Minute) / deltaTime
-		ss.Total = s.total
+		deltaTime := int64(count-1) * int64(s.duration)
+		delta = (int64)(s.history[count-1]) - int64(s.history[0])
+		ss.Speed = (int64)(delta * int64(time.Minute) / deltaTime)
 		return ss
 	}
 }
@@ -100,7 +97,6 @@ func (s *Speedometer) AddCount(n uint64) {
 	s.SetValue(s.count + n)
 }
 
-
 func (s *Speedometer) SetValue(n uint64) {
 	s.mutex.Lock()
 	s.count = n
@@ -123,7 +119,7 @@ func (s *Speedometer) GetStatusString() string {
 	case Variation:
 		statusWithoutName = fmt.Sprintf("Current: %d Variation: %d/min", stat.Count, stat.Speed)
 	case Progress:
-		statusWithoutName = fmt.Sprintf("Percent: %d%%, %d/%d", stat.Count*100/stat.Speed, stat.Count, stat.Total)
+		statusWithoutName = fmt.Sprintf("Percent: %d%%, %d/%d", stat.Count*100/stat.Total, stat.Count, stat.Total)
 	}
 
 	if s.name != "" {
@@ -210,7 +206,6 @@ func NewSpeedometer(config Config) *Speedometer {
 		server:           config.Server,
 		postIntervalSEC:  config.PostIntervalSEC,
 		printIntervalSEC: config.PrintIntervalSEC,
-		speedoType:       config.SpeedoType,
 	}
 	if s.postIntervalSEC == 0 {
 		s.postIntervalSEC = 60
@@ -231,6 +226,12 @@ func NewSpeedometer(config Config) *Speedometer {
 	if s.log {
 		go s.autoPrint()
 	}
+	return s
+}
+
+func NewVariationSpeedometer(config Config) *Speedometer {
+	s := NewSpeedometer(config)
+	s.speedoType = Variation
 	return s
 }
 

@@ -37,7 +37,6 @@ type Speedometer struct {
 type SpeedStat struct {
 	Count    uint64 `json:"count"`
 	Speed    int64  `json:"speed"`
-	Progress uint64 `json:"progress"`
 	Total    uint64 `json:"total"`
 }
 

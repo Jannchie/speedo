@@ -19,7 +19,7 @@ func TestSpeedoWithServer(t *testing.T) {
 }
 
 func TestProgressSpeedo(t *testing.T) {
-	s := NewProgressSpeedometer(15, Config{Log: true, Server: "http://:80", PrintIntervalSEC: 1, PostIntervalSEC: 1})
+	s := NewProgressSpeedometer(15, Config{Name: "test", Log: true, Server: "http://:80", PrintIntervalSEC: 1, PostIntervalSEC: 1})
 	ticker := time.NewTicker(time.Second / 10)
 	count := 50
 	for i := 0; i < count; i++ {
@@ -32,7 +32,7 @@ func TestProgressSpeedo(t *testing.T) {
 }
 
 func TestVariationSpeedo(t *testing.T) {
-	s := NewVariationSpeedometer(Config{Log: true, Server: "http://:80", PrintIntervalSEC: 1, PostIntervalSEC: 1})
+	s := NewVariationSpeedometer(Config{Name: "Raw Queue", Log: true, Server: "http://:80", PrintIntervalSEC: 1, PostIntervalSEC: 1})
 	ticker := time.NewTicker(time.Second / 100)
 	count := 1000
 	for i := 0; i < count; i++ {

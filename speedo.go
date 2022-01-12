@@ -35,9 +35,9 @@ type Speedometer struct {
 }
 
 type SpeedStat struct {
-	Count    uint64 `json:"count"`
-	Speed    int64  `json:"speed"`
-	Total    uint64 `json:"total"`
+	Count uint64 `json:"count"`
+	Speed int64  `json:"speed"`
+	Total uint64 `json:"total"`
 }
 
 type Config struct {
@@ -114,15 +114,15 @@ func (s *Speedometer) GetStatusString() string {
 
 	switch s.speedoType {
 	case Accumulation:
-		statusWithoutName = fmt.Sprintf("Speed: %d/min Total: %d", stat.Speed, stat.Count)
+		statusWithoutName = fmt.Sprintf("Speed: %6d/min, Total: %8d", stat.Speed, stat.Count)
 	case Variation:
-		statusWithoutName = fmt.Sprintf("Current: %d Variation: %d/min", stat.Count, stat.Speed)
+		statusWithoutName = fmt.Sprintf("Current: %5d, Variation: %+6d/min", stat.Count, stat.Speed)
 	case Progress:
-		statusWithoutName = fmt.Sprintf("Percent: %d%%, %d/%d", stat.Count*100/stat.Total, stat.Count, stat.Total)
+		statusWithoutName = fmt.Sprintf("Percent: %3d%%, %5d/%5d", stat.Count*100/stat.Total, stat.Count, stat.Total)
 	}
 
 	if s.name != "" {
-		return fmt.Sprintf("%s %s", s.name, statusWithoutName)
+		return fmt.Sprintf("%16s %s", s.name, statusWithoutName)
 	} else {
 		return statusWithoutName
 	}

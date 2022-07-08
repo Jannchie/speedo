@@ -18,24 +18,42 @@ var (
 	Progress     uint8 = 2
 )
 
+type PostData struct {
+	Name      string    `json:"name" gorm:"index"`
+	SID       string    `json:"sid" gorm:"primaryKey"`
+	Value     int64     `json:"Value"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type PostInfo struct {
+	ID              uint64    `json:"id" gorm:"primaryKey"`
+	SID             string    `json:"sid" form:"sid" gorm:"uniqueIndex"`
+	Name            string    `json:"name" form:"name" gorm:"index"`
+	Type            uint8     `json:"type"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	PostIntervalSEC int64     `json:"post_interval_sec" form:"post_interval_sec"`
+}
+
 type Speedometer struct {
 	id               string
 	name             string
 	log              bool
 	server           string
-	count            uint64
+	value            int64
+	lastValue        int64
 	total            uint64
 	postIntervalSEC  int64
 	printIntervalSEC int64
 	guard            chan struct{}
 	duration         time.Duration
-	history          []uint64
+	history          []int64
 	mutex            sync.RWMutex
 	speedoType       uint8
 }
 
 type SpeedStat struct {
-	Count uint64 `json:"count"`
+	Value int64  `json:"value"`
 	Speed int64  `json:"speed"`
 	Total uint64 `json:"total"`
 }
@@ -50,7 +68,7 @@ type Config struct {
 
 func (s *Speedometer) GetStat() SpeedStat {
 	ss := SpeedStat{}
-	ss.Count = s.count
+	ss.Value = s.value
 	ss.Total = s.total
 	var delta int64
 	s.mutex.Lock()
@@ -81,7 +99,7 @@ func (s *Speedometer) startTicker() {
 			}
 		case <-ticker.C:
 			s.mutex.Lock()
-			s.history = append(s.history, s.count)
+			s.history = append(s.history, s.value)
 			if l < 60 {
 				l += 1
 			} else {
@@ -92,13 +110,13 @@ func (s *Speedometer) startTicker() {
 	}
 }
 
-func (s *Speedometer) AddCount(n uint64) {
-	s.SetValue(s.count + n)
+func (s *Speedometer) AddValue(n int64) {
+	s.SetValue(s.value + n)
 }
 
-func (s *Speedometer) SetValue(n uint64) {
+func (s *Speedometer) SetValue(n int64) {
 	s.mutex.Lock()
-	s.count = n
+	s.value = n
 	s.mutex.Unlock()
 }
 
@@ -114,20 +132,18 @@ func (s *Speedometer) GetStatusString() string {
 
 	switch s.speedoType {
 	case Accumulation:
-		statusWithoutName = fmt.Sprintf("Speed: %6d/min, Total: %8d", stat.Speed, stat.Count)
+		statusWithoutName = fmt.Sprintf("  Speed: %10d/min,     Total: %8d", stat.Speed, stat.Value)
 	case Variation:
-		statusWithoutName = fmt.Sprintf("Current: %5d, Variation: %+6d/min", stat.Count, stat.Speed)
+		statusWithoutName = fmt.Sprintf("Current: %14d, Variation: %+7d/min", stat.Value, stat.Speed)
 	case Progress:
-		statusWithoutName = fmt.Sprintf("Percent: %3d%%, %5d/%5d", stat.Count*100/stat.Total, stat.Count, stat.Total)
+		statusWithoutName = fmt.Sprintf("Percent: %13d%%,    Values: %5d/%5d", stat.Value*100/int64(stat.Total), stat.Value, stat.Total)
 	}
-
 	if s.name != "" {
-		return fmt.Sprintf("%16s %s", s.name, statusWithoutName)
+		return fmt.Sprintf("%36s %s", s.name, statusWithoutName)
 	} else {
-		return statusWithoutName
+		return fmt.Sprintf("%36s %s", s.id, statusWithoutName)
 	}
 }
-
 func (s *Speedometer) autoPrint() {
 	ticker := time.NewTicker(time.Second * time.Duration(s.printIntervalSEC))
 	for {
@@ -145,10 +161,11 @@ func (s *Speedometer) autoPrint() {
 
 func (s *Speedometer) autoPost() {
 	ticker := time.NewTicker(time.Second * time.Duration(s.postIntervalSEC))
+	var lastPost int64 = 0
 	for {
 		select {
 		case <-ticker.C:
-			s.postLog()
+			s.postLog(&lastPost)
 		case _, ok := <-s.guard:
 			if !ok {
 				ticker.Stop()
@@ -164,14 +181,19 @@ func (s *Speedometer) Stop() {
 	s.mutex.Unlock()
 }
 
-func (s *Speedometer) postLog() {
+func (s *Speedometer) postLog(lastPost *int64) {
 	data := s.GetStat()
-	b, err := json.Marshal(data)
+	postData := PostData{
+		SID:   s.id,
+		Name:  s.name,
+		Value: data.Value,
+	}
+	b, err := json.Marshal(postData)
 	if err != nil {
 		log.Println(err)
 	}
 	_, err = http.Post(
-		fmt.Sprintf(`%s/stat/%s`, s.server, s.id),
+		fmt.Sprintf(`%s/stat`, s.server),
 		"application/json",
 		bytes.NewReader(b),
 	)
@@ -181,15 +203,14 @@ func (s *Speedometer) postLog() {
 }
 
 func (s *Speedometer) postInfo() {
-	b, _ := json.Marshal(struct {
-		Name string `json:"name"`
-		Type uint8  `json:"type"`
-	}{
-		Name: s.name,
-		Type: s.speedoType,
+	b, _ := json.Marshal(PostInfo{
+		SID:             s.id,
+		Name:            s.name,
+		Type:            s.speedoType,
+		PostIntervalSEC: s.postIntervalSEC,
 	})
 	_, err := http.Post(
-		fmt.Sprintf(`%s/info/%s`, s.server, s.id),
+		fmt.Sprintf(`%s/info`, s.server),
 		"application/json",
 		bytes.NewReader(b),
 	)

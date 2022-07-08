@@ -29,10 +29,11 @@ type PostInfo struct {
 	ID              uint64    `json:"id" gorm:"primaryKey"`
 	SID             string    `json:"sid" form:"sid" gorm:"uniqueIndex"`
 	Name            string    `json:"name" form:"name" gorm:"index"`
-	Type            uint8     `json:"type"`
+	Type            uint8     `json:"type" form:"total"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 	PostIntervalSEC int64     `json:"post_interval_sec" form:"post_interval_sec"`
+	Total           uint64    `json:"total" form:"total"`
 }
 
 type Speedometer struct {
@@ -203,19 +204,31 @@ func (s *Speedometer) postLog(lastPost *int64) {
 }
 
 func (s *Speedometer) postInfo() {
-	b, _ := json.Marshal(PostInfo{
-		SID:             s.id,
-		Name:            s.name,
-		Type:            s.speedoType,
-		PostIntervalSEC: s.postIntervalSEC,
-	})
-	_, err := http.Post(
-		fmt.Sprintf(`%s/info`, s.server),
-		"application/json",
-		bytes.NewReader(b),
-	)
-	if err != nil {
-		log.Println(err)
+	ticker := time.NewTicker(time.Second * time.Duration(s.postIntervalSEC) * 10)
+	for {
+		select {
+		case <-ticker.C:
+			b, _ := json.Marshal(PostInfo{
+				SID:             s.id,
+				Name:            s.name,
+				Type:            s.speedoType,
+				Total:           s.total,
+				PostIntervalSEC: s.postIntervalSEC,
+			})
+			_, err := http.Post(
+				fmt.Sprintf(`%s/info`, s.server),
+				"application/json",
+				bytes.NewReader(b),
+			)
+			if err != nil {
+				log.Println(err)
+			}
+		case _, ok := <-s.guard:
+			if !ok {
+				ticker.Stop()
+				return
+			}
+		}
 	}
 }
 

@@ -204,7 +204,7 @@ func (s *Speedometer) postLog(lastPost *int64) {
 }
 
 func (s *Speedometer) postInfo() {
-	ticker := time.NewTicker(time.Second * time.Duration(s.postIntervalSEC) * 10)
+	ticker := time.NewTicker(time.Second * time.Duration(s.postIntervalSEC))
 	for {
 		select {
 		case <-ticker.C:

@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+func TestSpeedo(t *testing.T) {
+	NewSpeedometer(Config{Log: true, Server: "http://:34747", PostIntervalSEC: 5, Name: "Consume"})
+	ticker := time.NewTicker(time.Second)
+	<-ticker.C
+}
+
 func TestSpeedoWithServer(t *testing.T) {
 	s := NewSpeedometer(Config{Log: true, Server: "http://:80", PostIntervalSEC: 5})
 	ticker := time.NewTicker(time.Second)

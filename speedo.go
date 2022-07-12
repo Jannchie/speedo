@@ -26,13 +26,14 @@ type PostData struct {
 }
 
 type PostInfo struct {
-	ID              uint64    `json:"id" gorm:"primaryKey"`
+	ID              uint64    `json:"-" gorm:"primaryKey"`
 	SID             string    `json:"sid" form:"sid" gorm:"uniqueIndex"`
 	Name            string    `json:"name" form:"name" gorm:"index"`
-	Type            uint8     `json:"type" form:"total"`
+	Type            uint8     `json:"type"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 	PostIntervalSEC int64     `json:"post_interval_sec" form:"post_interval_sec"`
+	Value           int64     `json:"value" form:"value"`
 	Total           uint64    `json:"total" form:"total"`
 }
 
@@ -42,7 +43,6 @@ type Speedometer struct {
 	log              bool
 	server           string
 	value            int64
-	lastValue        int64
 	total            uint64
 	postIntervalSEC  int64
 	printIntervalSEC int64
@@ -251,6 +251,7 @@ func NewSpeedometer(config Config) *Speedometer {
 		s.duration = time.Second * 1
 	}
 	if s.server != "" {
+		go s.setLatestValueFromServer()
 		go s.postInfo()
 		go s.autoPost()
 	}
@@ -260,6 +261,24 @@ func NewSpeedometer(config Config) *Speedometer {
 		go s.autoPrint()
 	}
 	return s
+}
+
+func (s *Speedometer) setLatestValueFromServer() {
+	resp, err := http.Get(fmt.Sprintf(`%s/info?name=%s`, s.server, s.name))
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	var info PostInfo
+	err = json.NewDecoder(resp.Body).Decode(&info)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	s.SetValue(info.Value)
+	s.SetTotal(info.Total)
+	fmt.Printf("%+v\n", s)
+	defer resp.Body.Close()
 }
 
 func NewVariationSpeedometer(config Config) *Speedometer {
